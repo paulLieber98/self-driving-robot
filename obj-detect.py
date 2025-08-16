@@ -1,8 +1,12 @@
 import cv2 as cv
 
+import time
+
+#https://ai.google.dev/edge/mediapipe/solutions/vision/object_detector/python#live-stream_2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+
 
 model_path = 'efficientdet_lite0.tflite'
 
@@ -14,8 +18,9 @@ ObjectDetector = mp.tasks.vision.ObjectDetector
 ObjectDetectorOptions = mp.tasks.vision.ObjectDetectorOptions
 VisionRunningMode = mp.tasks.vision.RunningMode.LIVE_STREAM
 
+#so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
-    print('detection result: {}'.format(result))
+    print(f'\n STARTS HERE: \n {result} \n ENDS HERE \n')
 
 options = ObjectDetectorOptions(
     base_options=BaseOptions(model_asset_path=model_path),
@@ -23,8 +28,8 @@ options = ObjectDetectorOptions(
     max_results=5,
     result_callback=print_result)
 
+#MAIN LOOP HERE
 with ObjectDetector.create_from_options(options) as detector:
-    #MAIN CAMERA LOOP
     if not camera.isOpened():
         print("Cannot open camera")
         exit()
@@ -39,7 +44,9 @@ with ObjectDetector.create_from_options(options) as detector:
         # Our operations on the frame come here
         bgr_to_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         #do whatever you need to do here with the RBG format image
-        #PASS
+        frame_timestamp_ms = int(time.time() * 1000) # x1000 for timestamp in MILLISECONDS 
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=bgr_to_rgb) #RESEARCH WHAT THIS DOES
+        detected_result = detector.detect_async(mp_image, frame_timestamp_ms) #on docs. the results are sent to the callback function above
 
         #invert image so looks normal
         bgr_to_rgb_flipped = cv.flip(bgr_to_rgb, 1)
