@@ -20,13 +20,6 @@ VisionRunningMode = mp.tasks.vision.RunningMode.LIVE_STREAM
 
 latest_detections = None #global variable to store the latest detection results
 
-#from google github: FOR LABELS AROUND BOXES + CONFIDENCE SCORES LATER ON
-MARGIN = 10  # pixels
-ROW_SIZE = 30  # pixels
-FONT_SIZE = 1
-FONT_THICKNESS = 1
-TEXT_COLOR = (0, 0, 0)  # black
-
 #so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
     global latest_detections
@@ -99,11 +92,20 @@ with ObjectDetector.create_from_options(options) as detector:
                     # Use the orange color for high visibility. #FROM GOOGLE GITHUB
                     cv.rectangle(final_frame, start_point_box, end_point_box, (0, 165, 255), 3)
 
+
                     #NOW ADDING LABELS TO THE BOUNDING BOXES
+                    #from google github: FOR LABELS AROUND BOXES + CONFIDENCE SCORES
+                    MARGIN = 10  # pixels
+                    ROW_SIZE = 30  # pixels
+                    FONT_SIZE = 1
+                    FONT_THICKNESS = 1
+                    TEXT_COLOR = (0, 0, 0)  # black
+
                     category = detection.categories[0]
                     category_name = category.category_name
                     probability = round(category.score, 2)
-                    result_text = category_name + ' (' + str(probability) + ')'
+                    result_text = f'{category_name} ( {str(probability)} )'
+
                     text_location = (MARGIN + bounding_box.origin_x,
                                     MARGIN + ROW_SIZE + bounding_box.origin_y)
                     cv.putText(final_frame, result_text, text_location, cv.FONT_HERSHEY_DUPLEX,
