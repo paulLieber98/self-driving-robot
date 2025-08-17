@@ -22,18 +22,6 @@ latest_detections = None #global variable to store the latest detection results
 
 #so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
-
-    # bounding_box = result.bounding_box
-    # obj_label = result.categories[0].category_name
-    # conf_score = result.categories[0].score
-
-    # for detection in result.detections:
-        # bounding_box = result.bounding_box
-        # start_point_box = bounding_box.origin_x, bounding_box.origin_y
-        # end_point_box = bounding_box.origin_x + bounding_box.width, bounding_box.origin_y + bounding_box.height
-        # # Use the orange color for high visibility.
-        # cv.rectangle(output_image, start_point_box, end_point_box, (0, 165, 255), 3)
-
     global latest_detections
     latest_detections = result
     
@@ -43,6 +31,9 @@ def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: 
     print(f"Result type: {type(result)}")
     print(f"Result attributes: {dir(result)}")
     
+    print(f'\n LATEST DETECTION LIST IN DETECTIONS OBJECT: \n {latest_detections.detections[0]} \n \n {latest_detections.detections[1]} \n \n {latest_detections.detections[2]} \n \n {latest_detections.detections[3]} \n \n {latest_detections.detections[4]}')
+
+
     # Check if it has detections attribute
     if hasattr(result, 'detections'):
         print(f"Number of detections: {len(result.detections)}")
@@ -75,7 +66,9 @@ with ObjectDetector.create_from_options(options) as detector:
         bgr_to_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         #do whatever you need to do here with the RBG format image
         frame_timestamp_ms = int(time.time() * 1000) # x1000 for timestamp in MILLISECONDS 
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=bgr_to_rgb) #RESEARCH WHAT THIS DOES
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=bgr_to_rgb) #.Image() is object function that the model expects to take in (next line, we use this object)
+                                        #.imageFormat.SRGB = 'standard RGB'
+        
         detected_result = detector.detect_async(mp_image, frame_timestamp_ms) #on docs. the results are sent to the callback function above
 
 
@@ -86,8 +79,10 @@ with ObjectDetector.create_from_options(options) as detector:
 
         if latest_detections: #if detections are found
             for detection in latest_detections.detections:
+                #latest_detections.detections looks like this and is a LIST. this is like first index in list [0]:
+                # Detection(bounding_box=BoundingBox(origin_x=346, origin_y=509, width=1534, height=566), categories=[Category(index=None, score=0.71875, display_name=None, category_name='person')], keypoints=[])
 
-                #if detection has bounding box (hasattr = has attribute)
+                #if detection has bounding box (hasattr = has attribute). look at the list above for reference what is going on.
                 if hasattr(detection, 'bounding_box'): 
                     bounding_box = detection.bounding_box
                     start_point_box = bounding_box.origin_x, bounding_box.origin_y
@@ -98,8 +93,8 @@ with ObjectDetector.create_from_options(options) as detector:
                 else:
                     print('no detections found')
 
-        if detection.categories: #adding labels to the bounding boxes
-            pass
+        # if detection.categories: #adding labels to the bounding boxes
+        #     pass
 
 
         # Display the resulting frame
