@@ -20,6 +20,13 @@ VisionRunningMode = mp.tasks.vision.RunningMode.LIVE_STREAM
 
 latest_detections = None #global variable to store the latest detection results
 
+#from google github: FOR LABELS AROUND BOXES + CONFIDENCE SCORES LATER ON
+MARGIN = 10  # pixels
+ROW_SIZE = 30  # pixels
+FONT_SIZE = 1
+FONT_THICKNESS = 1
+TEXT_COLOR = (0, 0, 0)  # black
+
 #so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
     global latest_detections
@@ -84,17 +91,27 @@ with ObjectDetector.create_from_options(options) as detector:
 
                 #if detection has bounding box (hasattr = has attribute). look at the list above for reference what is going on.
                 if hasattr(detection, 'bounding_box'): 
+
+                    #DRAWING BOUNDING BOXES
                     bounding_box = detection.bounding_box
                     start_point_box = bounding_box.origin_x, bounding_box.origin_y
                     end_point_box = bounding_box.origin_x + bounding_box.width, bounding_box.origin_y + bounding_box.height
                     # Use the orange color for high visibility. #FROM GOOGLE GITHUB
                     cv.rectangle(final_frame, start_point_box, end_point_box, (0, 165, 255), 3)
 
-                else:
-                    print('no detections found')
+                    #NOW ADDING LABELS TO THE BOUNDING BOXES
+                    category = detection.categories[0]
+                    category_name = category.category_name
+                    probability = round(category.score, 2)
+                    result_text = category_name + ' (' + str(probability) + ')'
+                    text_location = (MARGIN + bounding_box.origin_x,
+                                    MARGIN + ROW_SIZE + bounding_box.origin_y)
+                    cv.putText(final_frame, result_text, text_location, cv.FONT_HERSHEY_DUPLEX,
+                    FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv.LINE_AA)
 
-        # if detection.categories: #adding labels to the bounding boxes
-        #     pass
+                else:
+                    print('no detections found') 
+        
 
 
         # Display the resulting frame
