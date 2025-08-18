@@ -132,13 +132,15 @@ with ObjectDetector.create_from_options(options) as detector:
         frame_in_thirds = width // 3 #flat division
 
         #opencv slicing:
+        x1 = width // 3
+        x2 = 2 * width // 3
         #region = frame[y_start:y_end, x_start:x_end]
-        left_region = final_frame[0:1080, 0:640] #640 = 1920 / 3   || (1920 is width pixels total)
-        center_region = final_frame[0:1080, 640:1280] #1280 = (1920 / 3) * 2
-        right_region = final_frame[0:1080, 1280:1920] #then the rest
+        left_region = final_frame[0:height, 0:x1]
+        center_region = final_frame[0:height, x1:x2]
+        right_region = final_frame[0:height, x2:width]
         #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
-        cv.line(final_frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
-        cv.line(final_frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
+        cv.line(final_frame, (x1, 0), (x1, height), (0, 0, 255), 2) #red line
+        cv.line(final_frame, (x2, 0), (x2, height), (0, 0, 255), 2)
 
         #displaying regions - SHOWING THE SINGLE WINDOW WITH BANDS SEPERATING REGIONS FOR NOW.
         # cv.imshow('left_region', left_region)
