@@ -20,6 +20,10 @@ VisionRunningMode = mp.tasks.vision.RunningMode.LIVE_STREAM
 
 latest_detections = None #global variable to store the latest detection results
 
+#RISK VALUES FOR EACH REGION IN BINS: 
+risk_bins = [0, 0, 0] #LEFT, CENTER, RIGHT. every detection in whatever region will be added (+1) to the risk value for that region. at the end, taking path with min. risk
+
+
 #so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
     global latest_detections
@@ -45,6 +49,7 @@ def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: 
     #         print(f"Detection attributes: {dir(detection)}")
 
 
+
 options = ObjectDetectorOptions(
     base_options=BaseOptions(model_asset_path=model_path),
     running_mode=VisionRunningMode.LIVE_STREAM,
@@ -68,34 +73,6 @@ with ObjectDetector.create_from_options(options) as detector:
             break
 
 
-        #Splitting frame into 3 regions: Left, Center, Right. 
-        #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
-        #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
-
-        #flipping frame:
-        # frame_flipped = cv.flip(frame, 1)
-
-        # #https://www.geeksforgeeks.org/python/dividing-images-into-equal-parts-using-opencv-in-python/
-
-        # #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
-        # height, width, num_color_channels = frame_flipped.shape
-        # frame_in_thirds = width // 3 #flat division
-
-        # #opencv slicing:
-        # #region = frame[y_start:y_end, x_start:x_end]
-        # left_region = frame_flipped[0:1080, 0:640] #640 = 1920 / 3   || (1920 is width pixels total)
-        # center_region = frame_flipped[0:1080, 640:1280] #1280 = (1920 / 3) * 2
-        # right_region = frame_flipped[0:1080, 1280:1920] #then the rest
-        # #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
-        # # cv.line(frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
-        # # cv.line(frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
-
-        # #displaying regions
-        # cv.imshow('left_region', left_region)
-        # cv.imshow('center_region', center_region)
-        # cv.imshow('right_region', right_region)
-
-
         # Our operations on the frame come here
         bgr_to_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         frame_timestamp_ms = int(time.time() * 1000) # x1000 for timestamp in MILLISECONDS 
@@ -106,11 +83,13 @@ with ObjectDetector.create_from_options(options) as detector:
 
 
         # #invert image so looks normal
-        bgr_to_rgb_flipped = cv.flip(bgr_to_rgb, 1)
+        # bgr_to_rgb_flipped = cv.flip(bgr_to_rgb, 1) #DROP FLIP FOR NOW
         #back to bgr for display so no blue-ish tint
-        final_frame = cv.cvtColor(bgr_to_rgb_flipped, cv.COLOR_RGB2BGR)
+        # final_frame = cv.cvtColor(bgr_to_rgb_flipped, cv.COLOR_RGB2BGR)
+        final_frame = cv.cvtColor(bgr_to_rgb, cv.COLOR_RGB2BGR)
 
-        if latest_detections: #if detections are found
+        #IF DETECTIONS ARE FOUND, DO THE FOLLOWING:
+        if latest_detections: 
             for detection in latest_detections.detections:
                 #latest_detections.detections looks like this and is a LIST. this is like first index in list [0]:
                 # Detection(bounding_box=BoundingBox(origin_x=346, origin_y=509, width=1534, height=566), categories=[Category(index=None, score=0.71875, display_name=None, category_name='person')], keypoints=[])
@@ -162,22 +141,34 @@ with ObjectDetector.create_from_options(options) as detector:
         center_region = final_frame[0:1080, 640:1280] #1280 = (1920 / 3) * 2
         right_region = final_frame[0:1080, 1280:1920] #then the rest
         #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
-        # cv.line(frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
-        # cv.line(frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
+        cv.line(final_frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
+        cv.line(final_frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
 
-        #displaying regions
-        cv.imshow('left_region', left_region)
-        cv.imshow('center_region', center_region)
-        cv.imshow('right_region', right_region)
+        #displaying regions - SHOWING THE SINGLE WINDOW WITH BANDS SEPERATING REGIONS FOR NOW.
+        # cv.imshow('left_region', left_region)
+        # cv.imshow('center_region', center_region)
+        # cv.imshow('right_region', right_region)
 
+        #if detection is found, add +1 to the risk value for the region it was found in
+        if latest_detections: #if detections are found
+            for detection in latest_detections.detections: 
+                if hasattr(detection, 'bounding_box'): #if detection has bounding box
+                    bounding_box = detection.bounding_box
+                    bounding_box_center_x = bounding_box.origin_x + (bounding_box.width / 2)
+                    if bounding_box_center_x >= 0 and bounding_box_center_x <= 640: #if detection is in left region
+                        risk_bins[0] += 1
+                    elif bounding_box.origin_x >= 640 and bounding_box_center_x <= 1280: #if detection is in center region
+                        risk_bins[1] += 1
+                    elif bounding_box_center_x >= 1280 and bounding_box_center_x <= 1920: #if detection is in right region
+                        risk_bins[2] += 1
+                    else:
+                        print('detection not in any region')
 
-
-
-
+        print(f'risk bins: {risk_bins}')
 
 
         # Display the resulting frame
-        # cv.imshow('frame', final_frame)
+        cv.imshow('frame', final_frame)
 
         if cv.waitKey(1) == ord('q'):
             break
