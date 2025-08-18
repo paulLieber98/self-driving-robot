@@ -20,9 +20,6 @@ VisionRunningMode = mp.tasks.vision.RunningMode.LIVE_STREAM
 
 latest_detections = None #global variable to store the latest detection results
 
-#RISK VALUES FOR EACH REGION IN BINS: 
-risk_bins = [0, 0, 0] #LEFT, CENTER, RIGHT. every detection in whatever region will be added (+1) to the risk value for that region. at the end, taking path with min. risk
-
 
 #so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
@@ -93,7 +90,6 @@ with ObjectDetector.create_from_options(options) as detector:
             for detection in latest_detections.detections:
                 #latest_detections.detections looks like this and is a LIST. this is like first index in list [0]:
                 # Detection(bounding_box=BoundingBox(origin_x=346, origin_y=509, width=1534, height=566), categories=[Category(index=None, score=0.71875, display_name=None, category_name='person')], keypoints=[])
-
                 #if detection has bounding box (hasattr = has attribute). look at the list above for reference what is going on.
                 if hasattr(detection, 'bounding_box'): 
 
@@ -149,17 +145,22 @@ with ObjectDetector.create_from_options(options) as detector:
         # cv.imshow('center_region', center_region)
         # cv.imshow('right_region', right_region)
 
+
+        #RISK VALUES FOR EACH REGION IN BINS: 
+        risk_bins = [0, 0, 0] #LEFT, CENTER, RIGHT. every detection in whatever region will be added (+1) to the risk value for that region. at the end, taking path with min. risk
+
         #if detection is found, add +1 to the risk value for the region it was found in
         if latest_detections: #if detections are found
             for detection in latest_detections.detections: 
                 if hasattr(detection, 'bounding_box'): #if detection has bounding box
+
                     bounding_box = detection.bounding_box
-                    bounding_box_center_x = bounding_box.origin_x + (bounding_box.width / 2)
-                    if bounding_box_center_x >= 0 and bounding_box_center_x <= 640: #if detection is in left region
+                    bounding_box_center_x = bounding_box.origin_x + (bounding_box.width // 2)
+                    if bounding_box_center_x <= width // 3: #if detection is in left region
                         risk_bins[0] += 1
-                    elif bounding_box.origin_x >= 640 and bounding_box_center_x <= 1280: #if detection is in center region
+                    elif bounding_box_center_x >= width // 3 and bounding_box_center_x <= 2 * width // 3: #if detection is in center region
                         risk_bins[1] += 1
-                    elif bounding_box_center_x >= 1280 and bounding_box_center_x <= 1920: #if detection is in right region
+                    elif bounding_box_center_x  <= width and bounding_box_center_x >= 2 * width // 3: #if detection is in right region
                         risk_bins[2] += 1
                     else:
                         print('detection not in any region')
