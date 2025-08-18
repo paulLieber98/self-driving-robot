@@ -20,7 +20,6 @@ VisionRunningMode = mp.tasks.vision.RunningMode.LIVE_STREAM
 
 latest_detections = None #global variable to store the latest detection results
 
-
 #so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
     global latest_detections
@@ -44,8 +43,6 @@ def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: 
     #     for i, detection in enumerate(result.detections):
     #         print(f"Detection {i}: {detection}")
     #         print(f"Detection attributes: {dir(detection)}")
-
-
 
 options = ObjectDetectorOptions(
     base_options=BaseOptions(model_asset_path=model_path),
@@ -133,7 +130,7 @@ with ObjectDetector.create_from_options(options) as detector:
 
         #opencv slicing:
         x1 = width // 3
-        x2 = 2 * width // 3
+        x2 = (width // 3) * 2
         #region = frame[y_start:y_end, x_start:x_end]
         left_region = final_frame[0:height, 0:x1]
         center_region = final_frame[0:height, x1:x2]
@@ -147,7 +144,6 @@ with ObjectDetector.create_from_options(options) as detector:
         # cv.imshow('center_region', center_region)
         # cv.imshow('right_region', right_region)
 
-
         #RISK VALUES FOR EACH REGION IN BINS: 
         risk_bins = [0, 0, 0] #LEFT, CENTER, RIGHT. every detection in whatever region will be added (+1) to the risk value for that region. at the end, taking path with min. risk
 
@@ -158,11 +154,11 @@ with ObjectDetector.create_from_options(options) as detector:
 
                     bounding_box = detection.bounding_box
                     bounding_box_center_x = bounding_box.origin_x + (bounding_box.width // 2)
-                    if bounding_box_center_x <= width // 3: #if detection is in left region
+                    if bounding_box_center_x < x1:  #left region
                         risk_bins[0] += 1
-                    elif bounding_box_center_x >= width // 3 and bounding_box_center_x <= 2 * width // 3: #if detection is in center region
+                    elif x1 <= bounding_box_center_x < x2:  #center region
                         risk_bins[1] += 1
-                    elif bounding_box_center_x  <= width and bounding_box_center_x >= 2 * width // 3: #if detection is in right region
+                    elif bounding_box_center_x >= x2:  #right region
                         risk_bins[2] += 1
                     else:
                         print('detection not in any region')
