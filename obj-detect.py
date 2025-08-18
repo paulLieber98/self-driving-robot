@@ -25,21 +25,34 @@ def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: 
     global latest_detections
     latest_detections = result
     
-    print(f'\n STARTS HERE: \n {result} \n ENDS HERE \n')
+    #DEBUG STATEMENTS + TO FEEL OUT RESULTS FROM THE MODEL
+    # print(f'\n STARTS HERE: \n {result} \n ENDS HERE \n')
     
-    # Let's see what attributes this object actually has
-    print(f"Result type: {type(result)}")
-    print(f"Result attributes: {dir(result)}")
+    # # Let's see what attributes this object actually has
+    # print(f"Result type: {type(result)}")
+    # print(f"Result attributes: {dir(result)}")
     
-    print(f'\n LATEST DETECTION LIST IN DETECTIONS OBJECT: \n {latest_detections.detections[0]} \n \n {latest_detections.detections[1]} \n \n {latest_detections.detections[2]} \n \n {latest_detections.detections[3]} \n \n {latest_detections.detections[4]}')
+    # print(f'\n LATEST DETECTION LIST IN DETECTIONS OBJECT: \n {latest_detections.detections[0]} \n \n {latest_detections.detections[1]} \n \n {latest_detections.detections[2]} \n \n {latest_detections.detections[3]} \n \n {latest_detections.detections[4]}')
+
+    # print(f'frame.shape: {frame.shape}')
+    # print(f'\n starts here: \n {frame} \n ends here \n')
+
+    # # Check if it has detections attribute
+    # if hasattr(result, 'detections'):
+    #     print(f"Number of detections: {len(result.detections)}")
+    #     for i, detection in enumerate(result.detections):
+    #         print(f"Detection {i}: {detection}")
+    #         print(f"Detection attributes: {dir(detection)}")
 
 
-    # Check if it has detections attribute
-    if hasattr(result, 'detections'):
-        print(f"Number of detections: {len(result.detections)}")
-        for i, detection in enumerate(result.detections):
-            print(f"Detection {i}: {detection}")
-            print(f"Detection attributes: {dir(detection)}")
+#Splitting frame into 3 regions: Left, Center, Right. 
+#These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
+#will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
+
+#https://www.geeksforgeeks.org/python/dividing-images-into-equal-parts-using-opencv-in-python/
+left_region = None #hold on
+
+
 
 options = ObjectDetectorOptions(
     base_options=BaseOptions(model_asset_path=model_path),
@@ -62,6 +75,29 @@ with ObjectDetector.create_from_options(options) as detector:
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
             break
+
+        #Splitting frame into 3 regions: Left, Center, Right. 
+        #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
+        #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
+
+        #https://www.geeksforgeeks.org/python/dividing-images-into-equal-parts-using-opencv-in-python/
+
+        #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
+        height, width, num_color_channels = frame.shape
+        frame_in_thirds = width // 3 #flat division
+
+        #opencv slicing:
+        #region = frame[y_start:y_end, x_start:x_end]
+        left_region = frame[0:1080, 0:640] #640 = 1920 / 3   || (1920 is width pixels total)
+        center_region = frame[0:1080, 640:1280] #1280 = (1920 / 3) * 2
+        right_region = frame[0:1080, 1280:1920] #then the rest
+
+        #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
+        cv.line(frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
+        cv.line(frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
+
+
+
         # Our operations on the frame come here
         bgr_to_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         #do whatever you need to do here with the RBG format image
