@@ -45,15 +45,6 @@ def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: 
     #         print(f"Detection attributes: {dir(detection)}")
 
 
-#Splitting frame into 3 regions: Left, Center, Right. 
-#These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
-#will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
-
-#https://www.geeksforgeeks.org/python/dividing-images-into-equal-parts-using-opencv-in-python/
-left_region = None #hold on
-
-
-
 options = ObjectDetectorOptions(
     base_options=BaseOptions(model_asset_path=model_path),
     running_mode=VisionRunningMode.LIVE_STREAM,
@@ -76,39 +67,45 @@ with ObjectDetector.create_from_options(options) as detector:
             print("Can't receive frame (stream end?). Exiting ...")
             break
 
+
         #Splitting frame into 3 regions: Left, Center, Right. 
         #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
         #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
 
-        #https://www.geeksforgeeks.org/python/dividing-images-into-equal-parts-using-opencv-in-python/
+        #flipping frame:
+        # frame_flipped = cv.flip(frame, 1)
 
-        #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
-        height, width, num_color_channels = frame.shape
-        frame_in_thirds = width // 3 #flat division
+        # #https://www.geeksforgeeks.org/python/dividing-images-into-equal-parts-using-opencv-in-python/
 
-        #opencv slicing:
-        #region = frame[y_start:y_end, x_start:x_end]
-        left_region = frame[0:1080, 0:640] #640 = 1920 / 3   || (1920 is width pixels total)
-        center_region = frame[0:1080, 640:1280] #1280 = (1920 / 3) * 2
-        right_region = frame[0:1080, 1280:1920] #then the rest
+        # #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
+        # height, width, num_color_channels = frame_flipped.shape
+        # frame_in_thirds = width // 3 #flat division
 
-        #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
-        cv.line(frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
-        cv.line(frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
+        # #opencv slicing:
+        # #region = frame[y_start:y_end, x_start:x_end]
+        # left_region = frame_flipped[0:1080, 0:640] #640 = 1920 / 3   || (1920 is width pixels total)
+        # center_region = frame_flipped[0:1080, 640:1280] #1280 = (1920 / 3) * 2
+        # right_region = frame_flipped[0:1080, 1280:1920] #then the rest
+        # #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
+        # # cv.line(frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
+        # # cv.line(frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
 
+        # #displaying regions
+        # cv.imshow('left_region', left_region)
+        # cv.imshow('center_region', center_region)
+        # cv.imshow('right_region', right_region)
 
 
         # Our operations on the frame come here
         bgr_to_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-        #do whatever you need to do here with the RBG format image
         frame_timestamp_ms = int(time.time() * 1000) # x1000 for timestamp in MILLISECONDS 
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=bgr_to_rgb) #.Image() is object function that the model expects to take in (next line, we use this object)
                                         #.imageFormat.SRGB = 'standard RGB'
-        
+
         detected_result = detector.detect_async(mp_image, frame_timestamp_ms) #on docs. the results are sent to the callback function above
 
 
-        #invert image so looks normal
+        # #invert image so looks normal
         bgr_to_rgb_flipped = cv.flip(bgr_to_rgb, 1)
         #back to bgr for display so no blue-ish tint
         final_frame = cv.cvtColor(bgr_to_rgb_flipped, cv.COLOR_RGB2BGR)
@@ -151,9 +148,36 @@ with ObjectDetector.create_from_options(options) as detector:
                     print('no detections found') 
         
 
+        #Splitting frame into 3 regions: Left, Center, Right. 
+        #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
+        #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
+
+        #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
+        height, width, num_color_channels = final_frame.shape
+        frame_in_thirds = width // 3 #flat division
+
+        #opencv slicing:
+        #region = frame[y_start:y_end, x_start:x_end]
+        left_region = final_frame[0:1080, 0:640] #640 = 1920 / 3   || (1920 is width pixels total)
+        center_region = final_frame[0:1080, 640:1280] #1280 = (1920 / 3) * 2
+        right_region = final_frame[0:1080, 1280:1920] #then the rest
+        #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
+        # cv.line(frame, (640, 0), (640, 1080), (0, 0, 255), 2) #red line
+        # cv.line(frame, (1280, 0), (1280, 1080), (0, 0, 255), 2)
+
+        #displaying regions
+        cv.imshow('left_region', left_region)
+        cv.imshow('center_region', center_region)
+        cv.imshow('right_region', right_region)
+
+
+
+
+
+
 
         # Display the resulting frame
-        cv.imshow('frame', final_frame)
+        # cv.imshow('frame', final_frame)
 
         if cv.waitKey(1) == ord('q'):
             break
