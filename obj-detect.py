@@ -118,15 +118,50 @@ with ObjectDetector.create_from_options(options) as detector:
 
                 else:
                     print('no detections found') 
-        
+
+        #WEIGHTED RISK ADDITION TO THE BINS. making everything proportional to the risk(e.g. smaller object = less risk than bigger object)
+        #calculating area of bounding box as a proportion to the entire frame size. 
+        #then, multiplying that area by the confidence score to get the weighted risk value
+
+        area_bounding_box = 0
+        #calculate area of bounding box || rectangle area = width * height
+        if latest_detections:
+            for detection in latest_detections.detections:
+                if hasattr(detection, 'bounding_box'):
+                    bounding_box = detection.bounding_box
+                    area_bounding_box = bounding_box.width * bounding_box.height
+                    # print(f'area_bounding_box: {area_bounding_box}')
+                    break
+
+        #define height, width, num_color_channels of frame
+        #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
+        height, width, num_color_channels = final_frame.shape
+
+        #calculate area of frame
+        area_frame = width * height
+
+        #calculate area of bounding box as a proportion to the entire frame size. 
+        area_proportion = area_bounding_box / area_frame
+
+
+
+        #calculate weighted risk value
+        if latest_detections:
+            for detection in latest_detections.detections:
+                #detection.categories[0].score comes from the 'detection' thing that looks like this:
+                # Detection(bounding_box=BoundingBox(origin_x=346, origin_y=509, width=1534, height=566), categories=[Category(index=None, score=0.71875, display_name=None, category_name='person')], keypoints=[])
+                # so that is the 'detection.' part. the 'categories[0]' part is where it says 'categories'. 'index' in that is set to None meaning theres nothing there so the 'score' variable because the first one making it [0] accessible.
+                weighted_risk_value = round(area_proportion * detection.categories[0].score, 3)
+
+        #adding the weighted risk value to the risk bins IN THE LOOP BELOW WHERE WE ADD +1 TO THE RISK BINS FOR EACH REGION
+        #DOWN BELOW
 
         #Splitting frame into 3 regions: Left, Center, Right. 
         #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
         #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
 
-        #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
-        height, width, num_color_channels = final_frame.shape
-        frame_in_thirds = width // 3 #flat division
+        #getting the width of a singular region (a third of the frame)
+        frame_in_thirds = width // 3 #flat division for int
 
         #opencv slicing:
         x1 = width // 3
@@ -151,15 +186,15 @@ with ObjectDetector.create_from_options(options) as detector:
         if latest_detections: #if detections are found
             for detection in latest_detections.detections: 
                 if hasattr(detection, 'bounding_box'): #if detection has bounding box
-
                     bounding_box = detection.bounding_box
                     bounding_box_center_x = bounding_box.origin_x + (bounding_box.width // 2)
+
                     if bounding_box_center_x < x1:  #left region
-                        risk_bins[0] += 1
+                        risk_bins[0] += weighted_risk_value #add weighted risk value instead of a simple +1 for everything
                     elif x1 <= bounding_box_center_x < x2:  #center region
-                        risk_bins[1] += 1
+                        risk_bins[1] += weighted_risk_value
                     elif bounding_box_center_x >= x2:  #right region
-                        risk_bins[2] += 1
+                        risk_bins[2] += weighted_risk_value
                     else:
                         print('detection not in any region')
 
