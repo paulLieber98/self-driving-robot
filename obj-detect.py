@@ -44,6 +44,11 @@ def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: 
     #         print(f"Detection {i}: {detection}")
     #         print(f"Detection attributes: {dir(detection)}")
 
+def emergency_stop():
+    print('EMERGENCY STOP: OBJECT RIGHT IN FRONT')
+    #ADD ACTUAL STOP LOGIC FOR THE ROBOT HERE
+    pass #placerholder for now until actual stop logic
+
 options = ObjectDetectorOptions(
     base_options=BaseOptions(model_asset_path=model_path),
     running_mode=VisionRunningMode.LIVE_STREAM,
@@ -122,7 +127,6 @@ with ObjectDetector.create_from_options(options) as detector:
         #WEIGHTED RISK ADDITION TO THE BINS. making everything proportional to the risk(e.g. smaller object = less risk than bigger object)
         #calculating area of bounding box as a proportion to the entire frame size. 
         #then, multiplying that area by the confidence score to get the weighted risk value
-
         area_bounding_box = 0
         #calculate area of bounding box || rectangle area = width * height
         if latest_detections:
@@ -143,8 +147,6 @@ with ObjectDetector.create_from_options(options) as detector:
         #calculate area of bounding box as a proportion to the entire frame size. 
         area_proportion = area_bounding_box / area_frame
 
-
-
         #calculate weighted risk value
         if latest_detections:
             for detection in latest_detections.detections:
@@ -152,11 +154,23 @@ with ObjectDetector.create_from_options(options) as detector:
                 # Detection(bounding_box=BoundingBox(origin_x=346, origin_y=509, width=1534, height=566), categories=[Category(index=None, score=0.71875, display_name=None, category_name='person')], keypoints=[])
                 # so that is the 'detection.' part. the 'categories[0]' part is where it says 'categories'. 'index' in that is set to None meaning theres nothing there so the 'score' variable because the first one making it [0] accessible.
                 weighted_risk_value = round(area_proportion * detection.categories[0].score, 3)
-
         #adding the weighted risk value to the risk bins IN THE LOOP BELOW WHERE WE ADD +1 TO THE RISK BINS FOR EACH REGION
         #DOWN BELOW
 
-        #Splitting frame into 3 regions: Left, Center, Right. 
+
+        #EMERGENCY STOP IF OBJECT RIGHT IN FRONT
+        #logic: if object is more than 50% of the frame AND the confidence score is > 0.70, it is too close
+        too_close_threshold = 0.5 #if bounding box of an object is more than 50% of the frame, it is too close
+        conf_score_too_close = 0.70 #if confidence score is > 0.70, it is too close
+        if latest_detections:
+            for detection in latest_detections.detections:
+                if hasattr(detection, 'bounding_box'):
+                    bounding_box = detection.bounding_box
+                    if bounding_box.width / width > too_close_threshold and detection.categories[0].score > conf_score_too_close:
+                        emergency_stop()
+        
+
+        #SPLITTING FRAME INTO 3 REGIONS: LEFT, CENTER, RIGHT.
         #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
         #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
 
