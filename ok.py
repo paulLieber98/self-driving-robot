@@ -57,7 +57,6 @@ options = ObjectDetectorOptions(
 
 detector = vision.ObjectDetector.create_from_options(options)
 
-
 #MAIN LOOP HERE
 with ObjectDetector.create_from_options(options) as detector:
     if not camera.isOpened():
@@ -72,6 +71,7 @@ with ObjectDetector.create_from_options(options) as detector:
             print("Can't receive frame (stream end?). Exiting ...")
             break
 
+
         # Our operations on the frame come here
         bgr_to_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         frame_timestamp_ms = int(time.time() * 1000) # x1000 for timestamp in MILLISECONDS 
@@ -80,48 +80,12 @@ with ObjectDetector.create_from_options(options) as detector:
 
         detected_result = detector.detect_async(mp_image, frame_timestamp_ms) #on docs. the results are sent to the callback function above
 
+
         # #invert image so looks normal
         # bgr_to_rgb_flipped = cv.flip(bgr_to_rgb, 1) #DROP FLIP FOR NOW
         #back to bgr for display so no blue-ish tint
         # final_frame = cv.cvtColor(bgr_to_rgb_flipped, cv.COLOR_RGB2BGR)
         final_frame = cv.cvtColor(bgr_to_rgb, cv.COLOR_RGB2BGR)
-
-
-        ##VARIABLES HERE FOR MAIN LOOP FEATURES
-        # for weighted risk calculation
-        area_bounding_box = 0
-
-        #REGIONS VARIABLES
-        #define height, width, num_color_channels of frame
-        #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
-        height, width, num_color_channels = final_frame.shape
-        frame_in_thirds = width // 3 #flat division for int
-        #calculate area of frame
-        area_frame = width * height
-        
-        #for region CUTOFFS (x-coordinates)
-        x1 = width // 3
-        x2 = (width // 3) * 2
-        #draw region cutoff lines (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
-        cv.line(final_frame, (x1, 0), (x1, height), (0, 0, 255), 2) #red line
-        cv.line(final_frame, (x2, 0), (x2, height), (0, 0, 255), 2)
-
-        #SPLITTING FRAME INTO 3 REGIONS: LEFT, CENTER, RIGHT.
-        #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
-        #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'      
-        #opencv slicing: region = frame[y_start:y_end, x_start:x_end]
-        left_region = final_frame[0:height, 0:x1]
-        center_region = final_frame[0:height, x1:x2]
-        right_region = final_frame[0:height, x2:width]
-        #displaying regions - SHOWING THE SINGLE WINDOW WITH BANDS SEPERATING REGIONS FOR NOW.
-        # cv.imshow('left_region', left_region)
-        # cv.imshow('center_region', center_region)
-        # cv.imshow('right_region', right_region)
-
-        #EMERGENCY STOP VARIABLES
-        too_close_threshold = 0.5 #if bounding box of an object is more than 50% of the frame, it is too close
-        conf_score_too_close = 0.70 #if confidence score is > 0.70, it is too close
-        
 
         #IF DETECTIONS ARE FOUND, DO THE FOLLOWING:
         if latest_detections: 
@@ -130,18 +94,15 @@ with ObjectDetector.create_from_options(options) as detector:
                 # Detection(bounding_box=BoundingBox(origin_x=346, origin_y=509, width=1534, height=566), categories=[Category(index=None, score=0.71875, display_name=None, category_name='person')], keypoints=[])
                 #if detection has bounding box (hasattr = has attribute). look at the list above for reference what is going on.
                 if hasattr(detection, 'bounding_box'): 
+
+                    #DRAWING BOUNDING BOXES
                     bounding_box = detection.bounding_box
-
-                    #EMERGENCY STOP LOGIC
-                    #logic: if object is more than 50% of the frame AND the confidence score is > 0.70, it is too close
-                    if bounding_box.width / width > too_close_threshold and detection.categories[0].score > conf_score_too_close:
-                        emergency_stop()
-
-                    #DRAWING BOUNDING BOXES 
                     start_point_box = bounding_box.origin_x, bounding_box.origin_y
                     end_point_box = bounding_box.origin_x + bounding_box.width, bounding_box.origin_y + bounding_box.height
                     # Use the orange color for high visibility. #FROM GOOGLE GITHUB
                     cv.rectangle(final_frame, start_point_box, end_point_box, (0, 165, 255), 3)
+
+
                     #NOW ADDING LABELS TO THE BOUNDING BOXES
                     #from google github: FOR LABELS AROUND BOXES + CONFIDENCE SCORES
                     MARGIN = 10  # pixels
@@ -149,59 +110,110 @@ with ObjectDetector.create_from_options(options) as detector:
                     FONT_SIZE = 1
                     FONT_THICKNESS = 1
                     TEXT_COLOR = (0, 0, 0)  # black
-                    #FROM GOOGLE GITHUB: FOR LABELS AROUND BOXES + CONFIDENCE SCORES
+
                     category = detection.categories[0]
                     category_name = category.category_name
                     probability = round(category.score, 2)
                     result_text = f'{category_name} ( {str(probability)} )'
-                    #FROM GOOGLE GITHUB: FOR LABELS AROUND BOXES + CONFIDENCE SCORES
+
                     text_location = (MARGIN + bounding_box.origin_x,
                                     MARGIN + ROW_SIZE + bounding_box.origin_y)
                     cv.putText(final_frame, result_text, text_location, cv.FONT_HERSHEY_DUPLEX,
                     FONT_SIZE, TEXT_COLOR, FONT_THICKNESS, cv.LINE_AA)
 
                 else:
-                    print('no detections found')
-        
+                    print('no detections found') 
 
-        #GETTING AREA OF FIRST DETECTION BOUNDING BOX
+        #WEIGHTED RISK ADDITION TO THE BINS. making everything proportional to the risk(e.g. smaller object = less risk than bigger object)
+        #calculating area of bounding box as a proportion to the entire frame size. 
+        #then, multiplying that area by the confidence score to get the weighted risk value
         area_bounding_box = 0
+        #calculate area of bounding box || rectangle area = width * height
         if latest_detections:
             for detection in latest_detections.detections:
                 if hasattr(detection, 'bounding_box'):
                     bounding_box = detection.bounding_box
                     area_bounding_box = bounding_box.width * bounding_box.height
+                    # print(f'area_bounding_box: {area_bounding_box}')
                     break
 
-        #GETTING AREA PROPORTION OF FIRST DETECTION BOUNDING BOX TO FULL FRAME
-        area_proportion = 0
-        if area_bounding_box:
-            area_proportion = area_bounding_box / area_frame      
+        #define height, width, num_color_channels of frame
+        #frame.shape is this: frame.shape: (1080, 1920, 3) from our print statement in callback function
+        height, width, num_color_channels = final_frame.shape
 
-        #GETTING WEIGHTED VALUE USING THE LAST DETECTION'S SCORE
-        weighted_risk_value = 0
+        #calculate area of frame
+        area_frame = width * height
+
+        #calculate area of bounding box as a proportion to the entire frame size. 
+        area_proportion = area_bounding_box / area_frame
+
+        #calculate weighted risk value
         if latest_detections:
             for detection in latest_detections.detections:
+                #detection.categories[0].score comes from the 'detection' thing that looks like this:
+                # Detection(bounding_box=BoundingBox(origin_x=346, origin_y=509, width=1534, height=566), categories=[Category(index=None, score=0.71875, display_name=None, category_name='person')], keypoints=[])
+                # so that is the 'detection.' part. the 'categories[0]' part is where it says 'categories'. 'index' in that is set to None meaning theres nothing there so the 'score' variable because the first one making it [0] accessible.
                 weighted_risk_value = round(area_proportion * detection.categories[0].score, 3)
+        #adding the weighted risk value to the risk bins IN THE LOOP BELOW WHERE WE ADD +1 TO THE RISK BINS FOR EACH REGION
+        #DOWN BELOW
 
-        #ADD WEIGHTED RISK VALUE TO EACH BIN FOR EACH REGION
-        risk_bins = [0, 0, 0] #LEFT, CENTER, RIGHT. every detection in whatever region will be added (+1) to the risk value for that region. at the end, taking path with min. risk
+
+        #EMERGENCY STOP IF OBJECT RIGHT IN FRONT
+        #logic: if object is more than 50% of the frame AND the confidence score is > 0.70, it is too close
+        too_close_threshold = 0.5 #if bounding box of an object is more than 50% of the frame, it is too close
+        conf_score_too_close = 0.70 #if confidence score is > 0.70, it is too close
         if latest_detections:
             for detection in latest_detections.detections:
                 if hasattr(detection, 'bounding_box'):
                     bounding_box = detection.bounding_box
+                    if bounding_box.width / width > too_close_threshold and detection.categories[0].score > conf_score_too_close:
+                        emergency_stop()
+        
+
+        #SPLITTING FRAME INTO 3 REGIONS: LEFT, CENTER, RIGHT.
+        #These regions will be used to determine the 'risk' of each part of what the robot sees in order to decide which way to go.
+        #will be measured in terms of 'how much stuff is in each region'. Then, robot will go to the region with the least risk or least amount of 'stuff'
+
+        #getting the width of a singular region (a third of the frame)
+        frame_in_thirds = width // 3 #flat division for int
+
+        #opencv slicing:
+        x1 = width // 3
+        x2 = (width // 3) * 2
+        #region = frame[y_start:y_end, x_start:x_end]
+        left_region = final_frame[0:height, 0:x1]
+        center_region = final_frame[0:height, x1:x2]
+        right_region = final_frame[0:height, x2:width]
+        #drawing line to make sure (https://docs.opencv.org/4.x/dc/da5/tutorial_py_drawing_functions.html)
+        cv.line(final_frame, (x1, 0), (x1, height), (0, 0, 255), 2) #red line
+        cv.line(final_frame, (x2, 0), (x2, height), (0, 0, 255), 2)
+
+        #displaying regions - SHOWING THE SINGLE WINDOW WITH BANDS SEPERATING REGIONS FOR NOW.
+        # cv.imshow('left_region', left_region)
+        # cv.imshow('center_region', center_region)
+        # cv.imshow('right_region', right_region)
+
+        #RISK VALUES FOR EACH REGION IN BINS: 
+        risk_bins = [0, 0, 0] #LEFT, CENTER, RIGHT. every detection in whatever region will be added (+1) to the risk value for that region. at the end, taking path with min. risk
+
+        #if detection is found, add +1 to the risk value for the region it was found in
+        if latest_detections: #if detections are found
+            for detection in latest_detections.detections: 
+                if hasattr(detection, 'bounding_box'): #if detection has bounding box
+                    bounding_box = detection.bounding_box
                     bounding_box_center_x = bounding_box.origin_x + (bounding_box.width // 2)
+
                     if bounding_box_center_x < x1:  #left region
-                        risk_bins[0] += weighted_risk_value
+                        risk_bins[0] += weighted_risk_value #add weighted risk value instead of a simple +1 for everything
                     elif x1 <= bounding_box_center_x < x2:  #center region
                         risk_bins[1] += weighted_risk_value
                     elif bounding_box_center_x >= x2:  #right region
                         risk_bins[2] += weighted_risk_value
                     else:
                         print('detection not in any region')
-                    
-        #displaying risk bins
+
         print(f'risk bins: {risk_bins}')
+
 
         # Display the resulting frame
         cv.imshow('frame', final_frame)
