@@ -24,3 +24,7 @@ youtube video that helped: https://www.youtube.com/watch?v=-RUVM_cXn18
 - 2 Pcs L298N Motor Driver Controller Board DC Dual H Bridge Module for Arduino Raspberry Pi Stepper Motor (2 Pcs, L298N)
 
 - emo car chassis w/ motors, battery box, speed encoder
+
+###library for robot movement:
+--> docs: https://gpiozero.readthedocs.io/en/stable/
+GPIOZERO !!

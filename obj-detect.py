@@ -7,6 +7,38 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+#for actual robot movement/control 
+from gpiozero import Motor
+
+
+#robot movement variables + functions + etc.
+motor_left = Motor(forward=27, backward=17) #IN1 = FORWARD, IN2 = BACKWARD
+motor_right = Motor(forward=22, backward=23) #IN3 = FORWARD, IN4 = BACKWARD
+
+#functions for robot movement
+def emergency_stop():
+    print('EMERGENCY STOP: OBJECT RIGHT IN FRONT')
+    #ADD ACTUAL STOP LOGIC FOR THE ROBOT HERE
+    motor_left.stop()
+    motor_right.stop()
+
+def move_forward():
+    motor_left.forward()
+    motor_right.forward()
+
+def move_backward():
+    motor_left.backward()
+    motor_right.backward()
+
+def turn_left(): #ADD DEGREES OF ROTATION HERE LATER ON
+    motor_left.backward()
+    motor_right.forward()
+
+def turn_right(): #ADD DEGREES OF ROTATION HERE LATER ON
+    motor_left.forward()
+    motor_right.backward()
+
+
 
 model_path = 'efficientdet_lite0.tflite'
 
@@ -19,6 +51,8 @@ ObjectDetectorOptions = mp.tasks.vision.ObjectDetectorOptions
 VisionRunningMode = mp.tasks.vision.RunningMode.LIVE_STREAM
 
 latest_detections = None #global variable to store the latest detection results
+
+
 
 #so the model detects things. what happens when it detects something? here is the function to do that
 def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: int):
@@ -44,11 +78,6 @@ def print_result(result: DetectionResult, output_image: mp.Image, timestamp_ms: 
     #         print(f"Detection {i}: {detection}")
     #         print(f"Detection attributes: {dir(detection)}")
 
-def emergency_stop():
-    print('EMERGENCY STOP: OBJECT RIGHT IN FRONT')
-    #ADD ACTUAL STOP LOGIC FOR THE ROBOT HERE
-    pass #placerholder for now until actual stop logic
-
 options = ObjectDetectorOptions(
     base_options=BaseOptions(model_asset_path=model_path),
     running_mode=VisionRunningMode.LIVE_STREAM,
@@ -56,7 +85,6 @@ options = ObjectDetectorOptions(
     result_callback=print_result)
 
 detector = vision.ObjectDetector.create_from_options(options)
-
 
 #MAIN LOOP HERE
 with ObjectDetector.create_from_options(options) as detector:
