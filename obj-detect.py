@@ -11,33 +11,54 @@ from mediapipe.tasks.python import vision
 from gpiozero import Motor
 
 
-#robot movement variables + functions + etc.
-motor_left = Motor(forward=27, backward=17) #IN1 = FORWARD, IN2 = BACKWARD
-motor_right = Motor(forward=22, backward=23) #IN3 = FORWARD, IN4 = BACKWARD
+import platform #for conditionals to check if this code is running on rasp pi or my laptop (mac)
 
-#functions for robot movement
-def emergency_stop():
-    print('EMERGENCY STOP: OBJECT RIGHT IN FRONT')
-    #ADD ACTUAL STOP LOGIC FOR THE ROBOT HERE
-    motor_left.stop()
-    motor_right.stop()
 
-def move_forward():
-    motor_left.forward()
-    motor_right.forward()
+if platform.system() == 'Linux':
 
-def move_backward():
-    motor_left.backward()
-    motor_right.backward()
+    #robot movement variables + functions + etc.
+    motor_left = Motor(forward=27, backward=17) #IN1 = FORWARD, IN2 = BACKWARD
+    motor_right = Motor(forward=22, backward=23) #IN3 = FORWARD, IN4 = BACKWARD
 
-def turn_left(): #ADD DEGREES OF ROTATION HERE LATER ON
-    motor_left.backward()
-    motor_right.forward()
+    #functions for robot movement
+    def emergency_stop():
+        #ADD ACTUAL STOP LOGIC FOR THE ROBOT HERE
+        print('EMERGENCY STOP: OBJECT RIGHT IN FRONT')
+        motor_left.stop()
+        motor_right.stop()
 
-def turn_right(): #ADD DEGREES OF ROTATION HERE LATER ON
-    motor_left.forward()
-    motor_right.backward()
 
+    def move_forward():
+        motor_left.forward()
+        motor_right.forward()
+
+    def move_backward():
+        motor_left.backward()
+        motor_right.backward()
+
+    def turn_left(): #ADD DEGREES OF ROTATION HERE LATER ON
+        motor_left.backward()
+        motor_right.forward()
+
+    def turn_right(): #ADD DEGREES OF ROTATION HERE LATER ON
+        motor_left.forward()
+        motor_right.backward()
+
+else:
+    def emergency_stop():
+        print('EMERG. STOP: (from NON LINUX STATEMENT)')
+    
+    def move_forward():
+        print('moving forward (non-linux)')
+
+    def move_backward():
+        print('moving backward (non-linux)')
+
+    def turn_left():
+        print('turning left (non-linux)')
+
+    def turn_right():
+        print('turning right (non-linux)')
 
 
 model_path = 'efficientdet_lite0.tflite'
@@ -84,7 +105,7 @@ options = ObjectDetectorOptions(
     max_results=5,
     result_callback=print_result)
 
-detector = vision.ObjectDetector.create_from_options(options)
+# detector = vision.ObjectDetector.create_from_options(options)
 
 #MAIN LOOP HERE
 with ObjectDetector.create_from_options(options) as detector:
@@ -144,12 +165,32 @@ with ObjectDetector.create_from_options(options) as detector:
         #displaying regions - SHOWING THE SINGLE WINDOW WITH BANDS SEPERATING REGIONS FOR NOW.
         # cv.imshow('left_region', left_region)
         # cv.imshow('center_region', center_region)
-        # cv.imshow('right_region', right_region)
-
-        #EMERGENCY STOP VARIABLES
+        # cv.imshow('right_region', right_region)        
+    
+        # EMERGENCY STOP LOGIC AFTER compute width/x1/x2 and thresholds
         too_close_threshold = 0.5 #if bounding box of an object is more than 50% of the frame, it is too close
         conf_score_too_close = 0.70 #if confidence score is > 0.70, it is too close
+        too_close = False
+        if latest_detections:
+            for detection in latest_detections.detections:
+                if hasattr(detection, 'bounding_box'):
+                    bounding_box = detection.bounding_box
+                    center_x = bounding_box.origin_x + (bounding_box.width // 2) #just center x. no y. (in middle but top of box)
+                    in_center = (x1 <= center_x < x2) #make sure center_x is in between first region(x1) and second region(x2)
+                    bigger_than_50_percent = (bounding_box.width / width) > too_close_threshold #make sure bounding box is bigger than 50% of the frame
+                    confident = detection.categories[0].score > conf_score_too_close #make sure confidence score is > 0.70
+                    #if all three conditions are met, set too_close to True and break the loop
+                    if in_center and bigger_than_50_percent and confident:
+                        too_close = True
+                        break
         
+        if too_close:
+            emergency_stop()
+            #skip movement decision this frame by going directly to showing frame instead of logic (find below right above showing frame forreal)
+            cv.imshow('frame', final_frame)
+            if cv.waitKey(1) == ord('q'):
+                break
+            continue
 
         #IF DETECTIONS ARE FOUND, DO THE FOLLOWING:
         if latest_detections: 
@@ -159,11 +200,6 @@ with ObjectDetector.create_from_options(options) as detector:
                 #if detection has bounding box (hasattr = has attribute). look at the list above for reference what is going on.
                 if hasattr(detection, 'bounding_box'): 
                     bounding_box = detection.bounding_box
-
-                    #EMERGENCY STOP LOGIC
-                    #logic: if object is more than 50% of the frame AND the confidence score is > 0.70, it is too close
-                    if bounding_box.width / width > too_close_threshold and detection.categories[0].score > conf_score_too_close:
-                        emergency_stop()
 
                     #DRAWING BOUNDING BOXES 
                     start_point_box = bounding_box.origin_x, bounding_box.origin_y
@@ -228,12 +264,41 @@ with ObjectDetector.create_from_options(options) as detector:
                     else:
                         print('detection not in any region')
                     
-        #displaying risk bins
+        #displaying risk bins + robot movement/logic after
         print(f'risk bins: {risk_bins}')
+
+        #MOVEMENT LOGIC:
+        #measures movement decision every 5 frames:
+        #storing 5 frame movement decisions in a list and taking the most common decision from those 5 frames to get ONE decision
+        #then resets list after 5 frames and taking majority decision to do it once again and again,e tc..
+        #this is to avoid the robot from moving everywhere too fast and to make it more stable
+        lowest_risk_region = min(risk_bins)
+        if lowest_risk_region == risk_bins[0]:
+            if platform.system() == 'Linux':
+                turn_left()
+            else:
+                print('turning left')
+        elif lowest_risk_region == risk_bins[1]:
+            if platform.system() == 'Linux':
+                move_forward()
+            else:
+                print('moving forward')
+        elif lowest_risk_region == risk_bins[2]:
+            if platform.system() == 'Linux':
+                turn_right()
+                time.sleep(1) 
+            else:
+                print('turning right')
+        #if nothing is detected or everything is equal, move forward 
+        elif risk_bins == [0, 0, 0] or risk_bins[0] == risk_bins[1] == risk_bins[2]:
+            if platform.system() == 'Linux':
+                move_forward()
+            else:
+                print('moving forward')
+
 
         # Display the resulting frame
         cv.imshow('frame', final_frame)
-
         if cv.waitKey(1) == ord('q'):
             break
  
