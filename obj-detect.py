@@ -10,6 +10,9 @@ from mediapipe.tasks.python import vision
 #for actual robot movement/control 
 from gpiozero import Motor
 
+#for camera that im using on robot (arducam camera for raspberry pi ||)
+from picamera2 import Picamera2 
+
 
 import platform #for conditionals to check if this code is running on rasp pi or my laptop (mac)
 
@@ -17,7 +20,7 @@ import platform #for conditionals to check if this code is running on rasp pi or
 if platform.system() == 'Linux':
 
     #robot movement variables + functions + etc.
-    motor_left = Motor(forward=27, backward=17) #IN1 = FORWARD, IN2 = BACKWARD
+    motor_left = Motor(forward=17, backward=27) #IN1 = FORWARD, IN2 = BACKWARD
     motor_right = Motor(forward=22, backward=23) #IN3 = FORWARD, IN4 = BACKWARD
 
     #functions for robot movement
@@ -61,9 +64,18 @@ else:
         print('turning right (non-linux)')
 
 
+
 model_path = 'efficientdet_lite0.tflite'
 
-camera = cv.VideoCapture(1)
+#CAMERA LOGISTICS
+# camera = cv.VideoCapture(0)
+picam2 = Picamera2()
+picam2.configure(picam2.create_preview_configuration(main={"format": "RGB888"}))
+picam2.start()
+
+HEADLESS = True  # no GUI windows; safe for SSH || wont be able to see what robot is seeing
+
+
 
 BaseOptions = mp.tasks.BaseOptions
 DetectionResult = mp.tasks.components.containers.Detection
@@ -109,17 +121,21 @@ options = ObjectDetectorOptions(
 
 #MAIN LOOP HERE
 with ObjectDetector.create_from_options(options) as detector:
-    if not camera.isOpened():
-        print("Cannot open camera")
-        exit()
-    while True:
-        # Capture frame-by-frame
-        ret, frame = camera.read()
+    #FOR NORMAL COMPUTER WEBCAM
+    # if not camera.isOpened():
+    #     print("Cannot open camera")
+    #     exit()
+    # while True:
+    #     # Capture frame-by-frame
+    #     ret, frame = camera.read()
     
-        # if frame is read correctly ret is True
-        if not ret:
-            print("Can't receive frame (stream end?). Exiting ...")
-            break
+    #     # if frame is read correctly ret is True
+    #     if not ret:
+    #         print("Can't receive frame (stream end?). Exiting ...")
+    #         break
+    while True:
+        #FOR RASPBERRY PI CAMERA
+        frame = picam2.capture_array()
 
         # Our operations on the frame come here
         bgr_to_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
@@ -183,13 +199,14 @@ with ObjectDetector.create_from_options(options) as detector:
                     if in_center and bigger_than_50_percent and confident:
                         too_close = True
                         break
-        
         if too_close:
             emergency_stop()
-            #skip movement decision this frame by going directly to showing frame instead of logic (find below right above showing frame forreal)
-            cv.imshow('frame', final_frame)
-            if cv.waitKey(1) == ord('q'):
-                break
+            if not HEADLESS:
+                #skip movement decision this frame by going directly to showing frame instead of logic (find below right above showing frame forreal)
+                cv.imshow('frame', final_frame)
+                if cv.waitKey(1) == ord('q'):
+                    break
+            time.sleep(0.03)  # small pause so dont spin too fast
             continue
 
         #IF DETECTIONS ARE FOUND, DO THE FOLLOWING:
@@ -275,12 +292,12 @@ with ObjectDetector.create_from_options(options) as detector:
         lowest_risk_region = min(risk_bins)
         if lowest_risk_region == risk_bins[0]:
             if platform.system() == 'Linux':
-                turn_left()
+                move_forward()
             else:
                 print('turning left')
         elif lowest_risk_region == risk_bins[1]:
             if platform.system() == 'Linux':
-                move_forward()
+                turn_left()
             else:
                 print('moving forward')
         elif lowest_risk_region == risk_bins[2]:
@@ -290,7 +307,7 @@ with ObjectDetector.create_from_options(options) as detector:
             else:
                 print('turning right')
         #if nothing is detected or everything is equal, move forward 
-        elif risk_bins == [0, 0, 0] or risk_bins[0] == risk_bins[1] == risk_bins[2]:
+        elif risk_bins == [0, 0, 0] or (risk_bins[0] == risk_bins[1] == risk_bins[2]) or (not latest_detections):
             if platform.system() == 'Linux':
                 move_forward()
             else:
@@ -298,12 +315,17 @@ with ObjectDetector.create_from_options(options) as detector:
 
 
         # Display the resulting frame
-        cv.imshow('frame', final_frame)
-        if cv.waitKey(1) == ord('q'):
-            break
+        if not HEADLESS:
+            cv.imshow('frame', final_frame)
+            if cv.waitKey(1) == ord('q'):
+                break
+        time.sleep(0.03)  # small pause so dont spin too fast
+        continue
+
  
 # When everything done, release the capture
-camera.release()
+# camera.release()
+picam2.stop()
 cv.destroyAllWindows()
 
 
